@@ -4,9 +4,9 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "main",
+      "label": "GameOfLife",
       "type": "shell",
-      "command": "g++ -o ./bin/main main.cpp -lX11 -lGL -lpthread -lpng -lstdc++fs -std=c++17 && ./bin/main",
+      "command": "g++ -o ./bin/GameOfLife GameOfLife.cpp -lX11 -lGL -lpthread -lpng -lstdc++fs -std=c++17 && ./bin/GameOfLife",
       "problemMatcher": [],
       "group": {
         "kind": "build",
