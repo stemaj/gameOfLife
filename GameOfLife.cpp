@@ -38,7 +38,6 @@ public:
     w = ScreenWidth();
     h = ScreenHeight();
     grid.resize(w*h);
-    grid = {0};
 
     // init some random
     for (int x = w / 4; x < 3 * w / 4; x++)
@@ -114,7 +113,7 @@ public:
 
   char valueUpperRight(int pos)
   {
-    if (onUpperEdge(pos) && onRightEdge(pos)) return grid[pos+w+1];
+    if (onUpperEdge(pos) && onRightEdge(pos)) return grid[w*(h-1)];
     else if (onRightEdge(pos)) return grid[pos-2*w+1];
     else if (onUpperEdge(pos)) return grid[pos+w*(h-1)+1];
     return grid[pos-w+1];
@@ -126,19 +125,55 @@ public:
     return grid[pos-w];
   }
 
-  int livingNeighbors(int x, int y)
+  int livingNeighbors(int val)
   {
     int sum = 0;
-    int val = y*w+x;
-    sum += (valueUpperLeft( val) == 1) ? 1 : 0;
-    sum += (valueLeft(      val) == 1) ? 1 : 0;
-    sum += (valueLowerLeft( val) == 1) ? 1 : 0;
-    sum += (valueLow(       val) == 1) ? 1 : 0;
-    sum += (valueLowerRight(val) == 1) ? 1 : 0;
-    sum += (valueRight(     val) == 1) ? 1 : 0;
-    sum += (valueUpperRight(val) == 1) ? 1 : 0;
-    sum += (valueUp(        val) == 1) ? 1 : 0;
+    sum += (valueUpperLeft( val)) ? 1 : 0;
+    sum += (valueLeft(      val)) ? 1 : 0;
+    sum += (valueLowerLeft( val)) ? 1 : 0;
+    sum += (valueLow(       val)) ? 1 : 0;
+    sum += (valueLowerRight(val)) ? 1 : 0;
+    sum += (valueRight(     val)) ? 1 : 0;
+    sum += (valueUpperRight(val)) ? 1 : 0;
+    sum += (valueUp(        val)) ? 1 : 0;
     return sum;
+  }
+
+  void DoIteration(std::vector<char>& updatedGrid)
+  {
+    auto size = grid.size();
+    for (int i = 0; i < size; i++)
+    {
+      int neig = livingNeighbors(i);
+      char WillBeLiving;
+      if (grid[i] == char(1)) // living
+      {
+        if (neig == 2 || neig == 3)
+        {
+          // survival
+          WillBeLiving = char(1);
+        }
+        else
+        {
+          // under-, overpopulation
+          WillBeLiving = char(0);
+        }
+      }
+      else // dead
+      {
+        if (neig == 3)
+        {
+          // reproduction
+          WillBeLiving = char(1);
+        }
+        else
+        {
+          // stay dead
+          WillBeLiving = char(0);
+        }
+      }
+      updatedGrid.emplace_back(WillBeLiving);
+    }
   }
 
 	bool OnUserUpdate(float fElapsedTime) override
@@ -147,42 +182,7 @@ public:
 
     std::vector<char> updatedGrid;
     updatedGrid.reserve(w*h);
-
-    for (int x = 0; x < w; x++)
-    {
-      for (int y = 0; y < h; y++)
-      {
-        int neig = livingNeighbors(x,y);
-        char WillBeLiving;
-        if (grid[y*w+x]) // living
-        {
-          if (neig == 2 || neig == 3)
-          {
-            // survival
-            WillBeLiving = char(1);
-          }
-          else
-          {
-            // under-, overpopulation
-            WillBeLiving = char(0);
-          }
-        }
-        else // dead
-        {
-          if (neig == 3)
-          {
-            // reproduction
-            WillBeLiving = char(1);
-          }
-          else
-          {
-            // stay dead
-            WillBeLiving = char(0);
-          }
-        }
-        updatedGrid.emplace_back(WillBeLiving);
-      }
-    }
+    DoIteration(updatedGrid);
     
     grid.assign(updatedGrid.begin(), updatedGrid.end()); 
     DrawGrid();
@@ -192,9 +192,9 @@ public:
 private:
   void DrawGrid()
   {
-    for (int x = 0; x < w; x++)
+    for (int y = 0; y < h; y++)
     {
-      for (int y = 0; y < h; y++)
+      for (int x = 0; x < w; x++)
       {
         Draw(x,y, grid[y*w+x] == 1 ? olc::CYAN : olc::DARK_BLUE);
       }
@@ -209,7 +209,7 @@ int main()
   context.run(); 
 #else
 	GameOfLife demo;
-	if (demo.Construct(120, 75, 8, 8))
+	if (demo.Construct(120*4, 75*4, 8/4, 8/4))
 		demo.Start();
 	return 0;
 #endif
@@ -217,7 +217,128 @@ int main()
 
 #ifdef RUN_TESTS
 
-TEST_CASE("test 3x3 grid") {
+TEST_CASE("living neighbors") {
+  GameOfLife test;
+  test.w = 4;
+  test.h = 3;
+  test.grid = { 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0 };
+
+  /*
+  .    .  o  o  .    .
+
+  .    .  .  o  .    .
+  o    o  .  .  o    o 
+  .    .  o  o  .    .
+
+  .    .  .  o  .    .
+  */
+
+  CHECK(test.valueUpperRight(3) == 0);
+  CHECK(test.valueRight(3) == 0);
+  CHECK(test.valueLowerRight(3) == 1);
+  CHECK(test.valueUpperLeft(3) == 1);
+  CHECK(test.valueLeft(3) == 1);
+  CHECK(test.valueLowerLeft(3) == 0);
+  CHECK(test.valueUp(3) == 0);
+  CHECK(test.valueLow(3) == 1);
+
+  CHECK(test.valueUpperRight(8) == 0);
+  CHECK(test.valueRight(8) == 1);
+  CHECK(test.valueLowerRight(8) == 0);
+  CHECK(test.valueUpperLeft(8) == 1);
+  CHECK(test.valueLeft(8) == 0);
+  CHECK(test.valueLowerLeft(8) == 0);
+  CHECK(test.valueUp(8) == 1);
+  CHECK(test.valueLow(8) == 0);
+  
+  CHECK(test.livingNeighbors(0) == 3);// t  1
+  CHECK(test.livingNeighbors(1) == 4);// t
+  CHECK(test.livingNeighbors(2) == 3);//    1
+  CHECK(test.livingNeighbors(3) == 4);// t
+  CHECK(test.livingNeighbors(4) == 2);//    1
+  CHECK(test.livingNeighbors(5) == 4);// t
+  CHECK(test.livingNeighbors(6) == 4);// t
+  CHECK(test.livingNeighbors(7) == 3);//    1
+  CHECK(test.livingNeighbors(8) == 3);// t  1
+  CHECK(test.livingNeighbors(9) == 3);//    1
+  CHECK(test.livingNeighbors(10) == 3);//   1
+  CHECK(test.livingNeighbors(11) == 4);// t 
+
+
+  std::vector<char> updatedGrid;
+  test.DoIteration(updatedGrid);
+  CHECK(updatedGrid.size() == test.w*test.h);
+
+  CHECK(updatedGrid == std::vector<char> { 1, 0, 1, 0, 1, 0, 0, 1, 1, 1, 1, 0 } );
+  
+  CHECK(test.grid == std::vector<char>   { 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0 } );
+  test.grid.assign(updatedGrid.begin(), updatedGrid.end()); 
+  CHECK(test.grid == std::vector<char>   { 1, 0, 1, 0, 1, 0, 0, 1, 1, 1, 1, 0 } );
+}
+
+TEST_CASE("test 3x2 grid positions") {
+  GameOfLife test;
+  test.w = 3;
+  test.h = 2;
+  test.grid = { 0, 1, 2, 3, 4, 5 };
+  CHECK(test.grid.size() == test.w*test.h);
+  CHECK(test.grid[test.grid.size()-1] == test.grid.back());
+
+  /*
+  5   3  4  5   3
+
+  2   0  1  2   0
+  5   3  4  5   3
+
+  2   0  1  2   0
+  */
+
+  CHECK(test.onLeftEdge(0));
+  CHECK(test.onLeftEdge(3));
+  CHECK(!test.onLeftEdge(1));
+  CHECK(!test.onLeftEdge(4));
+  CHECK(!test.onLeftEdge(2));
+  CHECK(!test.onLeftEdge(5));
+
+  CHECK(test.onUpperEdge(0));
+  CHECK(test.onUpperEdge(1));
+  CHECK(test.onUpperEdge(2));
+  CHECK(!test.onUpperEdge(3));
+  CHECK(!test.onUpperEdge(4));
+  CHECK(!test.onUpperEdge(5));
+
+  CHECK(test.onRightEdge(2));
+  CHECK(test.onRightEdge(5));
+  CHECK(!test.onRightEdge(0));
+  CHECK(!test.onRightEdge(1));
+  CHECK(!test.onRightEdge(3));
+  CHECK(!test.onRightEdge(4));
+
+  CHECK(test.onLowerEdge(3));
+  CHECK(test.onLowerEdge(4));
+  CHECK(test.onLowerEdge(5));
+  CHECK(!test.onLowerEdge(0));
+  CHECK(!test.onLowerEdge(1));
+  CHECK(!test.onLowerEdge(2));
+
+  CHECK(test.valueUpperRight(2) == 3);
+  CHECK(test.valueUp(        2) == 5);
+  CHECK(test.valueRight(     2) == 0);
+  
+  CHECK(test.valueLowerRight(5) == 0);
+  CHECK(test.valueLow(       5) == 2);
+  CHECK(test.valueRight(     5) == 3);
+
+  CHECK(test.valueLowerLeft(3) == 2);
+  CHECK(test.valueLow(      3) == 0);
+  CHECK(test.valueLeft(     3) == 5);
+
+  CHECK(test.valueUpperLeft(0) == 5);
+  CHECK(test.valueUp(       0) == 3);
+  CHECK(test.valueLeft(     0) == 2);
+}
+
+TEST_CASE("test 3x3 grid positions") {
   GameOfLife test;
   test.w = 3;
   test.h = 3;
