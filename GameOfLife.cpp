@@ -1,3 +1,9 @@
+//#define RUN_TESTS
+#ifdef RUN_TESTS
+  #define DOCTEST_CONFIG_IMPLEMENT
+  #include "doctest.h"
+#endif
+
 #define OLC_PGE_APPLICATION
 #include "olcPixelGameEngine.h"
 
@@ -20,140 +26,334 @@ public:
 		sAppName = "GameOfLife";
 	}
 
-  std::map<olc::vi2d, bool> grid;
+  std::vector<char> grid;
+  int w = 0;
+  int h = 0;
 
-  olc::Sprite *spriteLive;
-  olc::Sprite *spriteDead;
-  olc::Decal* decalLive;
-  olc::Decal* decalDead;
+  std::vector<char> updatedGrid;
 
 public:
 	bool OnUserCreate() override
 	{
-    for (int x = 0; x < ScreenWidth(); x++)
+    w = ScreenWidth();
+    h = ScreenHeight();
+    grid.resize(w*h);
+    grid = {0};
+
+    // init some random
+    for (int x = w / 4; x < 3 * w / 4; x++)
     {
-      for (int y = 0; y < ScreenHeight(); y++)
+      for (int y = h / 4; y < 3 * h / 4; y++)
       {
-        grid[olc::vi2d(x,y)] = false;
+        grid[y*w+x] = (wuerfel(1,3) == 1 || wuerfel(1,3) == 2) ? 1 : 0;
       }
     }
 
-    for (int x = ScreenWidth() / 4; x < 3 * ScreenWidth() / 4; x++)
-    {
-      for (int y = ScreenHeight() / 4; y < 3 * ScreenHeight() / 4; y++)
-      {
-        grid[olc::vi2d(x,y)] = wuerfel(1,3) == 1 || wuerfel(1,3) == 2;
-      }
-    }
-
-    spriteLive = new olc::Sprite(1,1);
-    spriteLive->SetPixel(0,0,olc::CYAN);
-    decalLive = new olc::Decal(spriteLive);
-
-    spriteDead = new olc::Sprite(1,1);
-    spriteDead->SetPixel(0,0,olc::DARK_BLUE);
-    decalDead = new olc::Decal(spriteDead);
-
-    for (const auto& g : grid)
-    {
-      //DrawDecal(g.first, g.second ? decalLive : decalDead);
-      Draw(g.first.x, g.first.y, g.second ? olc::CYAN : olc::DARK_BLUE);
-    }
-
+    DrawGrid();
 		return true;
 	}
 
-  int getPrevX(const int x)
+  char onUpperEdge(int val)
   {
-    if (x == 0) return ScreenWidth();
-    else return (x-1);
+    return (val < w) ? 1 : 0;
+  }
+  char onLeftEdge(int val)
+  {
+    return (val%w == 0) ? 1 : 0;
+  }
+  char onRightEdge(int val)
+  {
+    return ((val+1)%w == 0) ? 1 : 0;
+  }
+  char onLowerEdge(int val)
+  {
+    return ( val >= (h-1)*w ) ? 1 : 0;
   }
 
-  int getPrevY(const int y)
+  char valueUpperLeft(int pos)
   {
-    if (y == 0) return ScreenHeight();
-    else return (y-1);
+    if (onUpperEdge(pos) && onLeftEdge(pos)) return grid[(w*h)-1];
+    else if (onUpperEdge(pos)) return grid[w*(h-1)+pos-1];
+    else if (onLeftEdge(pos)) return grid[pos-1];
+    return grid[pos-w-1];
   }
 
-  int getNextX(const int x)
+  char valueLeft(int pos)
   {
-    if (x == ScreenWidth()) return 0;
-    else return (x+1);
+    if (onLeftEdge(pos)) return grid[pos+w-1];
+    return grid[pos-1];
   }
 
-  int getNextY(const int y)
+  char valueLowerLeft(int pos)
   {
-    if (y == ScreenHeight()) return 0;
-    else return (y+1);
+    if (onLowerEdge(pos) && onLeftEdge(pos)) return grid[w-1];
+    else if (onLeftEdge(pos)) return grid[pos+2*w-1];
+    else if (onLowerEdge(pos)) return grid[pos-(h-1)*w-1];  
+    return grid[pos+w-1];
   }
 
-  int livingNeighbors(olc::vi2d cell)
+  char valueLow(int pos)
+  {
+    if (onLowerEdge(pos)) return grid[pos-w*(h-1)];
+    return grid[pos+w];
+  }
+
+  char valueLowerRight(int pos)
+  {
+    if (onLowerEdge(pos) && onRightEdge(pos)) return grid[0];
+    else if (onRightEdge(pos)) return grid[pos+1];
+    else if (onLowerEdge(pos)) return grid[pos-(h-1)*w+1];
+    return grid[pos+w+1];
+  }
+
+  char valueRight(int pos)
+  {
+    if (onRightEdge(pos)) return grid[pos-w+1];
+    return grid[pos+1];
+  }
+
+  char valueUpperRight(int pos)
+  {
+    if (onUpperEdge(pos) && onRightEdge(pos)) return grid[pos+w+1];
+    else if (onRightEdge(pos)) return grid[pos-2*w+1];
+    else if (onUpperEdge(pos)) return grid[pos+w*(h-1)+1];
+    return grid[pos-w+1];
+  }
+  
+  char valueUp(int pos)
+  {
+    if (onUpperEdge(pos)) return grid[pos+w*(h-1)];
+    return grid[pos-w];
+  }
+
+  int livingNeighbors(int x, int y)
   {
     int sum = 0;
-    sum += grid[olc::vi2d(getPrevX(cell.x),getPrevY(cell.y))];
-    sum += grid[olc::vi2d(getPrevX(cell.x),         cell.y )];
-    sum += grid[olc::vi2d(getPrevX(cell.x),getNextY(cell.y))];
-    sum += grid[olc::vi2d(         cell.x ,getPrevY(cell.y))];
-    sum += grid[olc::vi2d(         cell.x ,getNextY(cell.y))];
-    sum += grid[olc::vi2d(getNextX(cell.x),getPrevY(cell.y))];
-    sum += grid[olc::vi2d(getNextX(cell.x),         cell.y )];
-    sum += grid[olc::vi2d(getNextX(cell.x),getNextY(cell.y))];
+    int val = y*w+x;
+    sum += (valueUpperLeft( val) == 1) ? 1 : 0;
+    sum += (valueLeft(      val) == 1) ? 1 : 0;
+    sum += (valueLowerLeft( val) == 1) ? 1 : 0;
+    sum += (valueLow(       val) == 1) ? 1 : 0;
+    sum += (valueLowerRight(val) == 1) ? 1 : 0;
+    sum += (valueRight(     val) == 1) ? 1 : 0;
+    sum += (valueUpperRight(val) == 1) ? 1 : 0;
+    sum += (valueUp(        val) == 1) ? 1 : 0;
     return sum;
   }
 
 	bool OnUserUpdate(float fElapsedTime) override
 	{
-    if (GetKey(olc::ESCAPE).bPressed) exit (0);
+    if (GetKey(olc::ESCAPE).bPressed) return false;
 
-    std::map<olc::vi2d, bool> updatedGrid;
+    std::vector<char> updatedGrid;
+    updatedGrid.reserve(w*h);
 
-    for (const auto& g : grid)
+    for (int x = 0; x < w; x++)
     {
-      int neig = livingNeighbors(g.first);
-      bool WillBeLiving;
-      if (g.second) // living
+      for (int y = 0; y < h; y++)
       {
-        if (neig == 2 || neig == 3)
+        int neig = livingNeighbors(x,y);
+        char WillBeLiving;
+        if (grid[y*w+x]) // living
         {
-          // survival
-          WillBeLiving = true;
+          if (neig == 2 || neig == 3)
+          {
+            // survival
+            WillBeLiving = char(1);
+          }
+          else
+          {
+            // under-, overpopulation
+            WillBeLiving = char(0);
+          }
         }
-        else
+        else // dead
         {
-          // under-, overpopulation
-          WillBeLiving = false;
+          if (neig == 3)
+          {
+            // reproduction
+            WillBeLiving = char(1);
+          }
+          else
+          {
+            // stay dead
+            WillBeLiving = char(0);
+          }
         }
+        updatedGrid.emplace_back(WillBeLiving);
       }
-      else // dead
-      {
-        if (neig == 3)
-        {
-          // reproduction
-          WillBeLiving = true;
-        }
-        else
-        {
-          // stay dead
-          WillBeLiving = false;
-        }
-      }
-      updatedGrid[g.first] = WillBeLiving;
     }
-
-    grid = updatedGrid;
-    for (const auto& g : grid)
-    {
-      //DrawDecal(g.first, g.second ? decalLive : decalDead);
-      Draw(g.first.x, g.first.y, g.second ? olc::CYAN : olc::DARK_BLUE);
-    }
+    
+    grid.assign(updatedGrid.begin(), updatedGrid.end()); 
+    DrawGrid();
+    
 		return true;
 	}
+private:
+  void DrawGrid()
+  {
+    for (int x = 0; x < w; x++)
+    {
+      for (int y = 0; y < h; y++)
+      {
+        Draw(x,y, grid[y*w+x] == 1 ? olc::CYAN : olc::DARK_BLUE);
+      }
+    }
+  }
 };
 
 int main()
 {
+#ifdef RUN_TESTS
+  doctest::Context context;
+  context.run(); 
+#else
 	GameOfLife demo;
 	if (demo.Construct(120, 75, 8, 8))
 		demo.Start();
 	return 0;
+#endif
 }
+
+#ifdef RUN_TESTS
+
+TEST_CASE("test 3x3 grid") {
+  GameOfLife test;
+  test.w = 3;
+  test.h = 3;
+  test.grid = { 0, 1, 2, 3, 4, 5, 6, 7, 8 };
+  CHECK(test.grid.size() == test.w*test.h);
+  CHECK(test.grid[test.grid.size()-1] == test.grid.back());
+
+  /*
+  8   6  7  8   6
+
+  2   0  1  2   0
+  5   3  4  5   3
+  8   6  7  8   6
+
+  2   0  1  2   0
+  */
+
+  CHECK(test.valueUp(0) == 6);
+  CHECK(test.valueUp(1) == 7);
+  CHECK(test.valueUp(2) == 8);
+  CHECK(test.valueUp(3) == 0);
+  CHECK(test.valueUp(4) == 1);
+  CHECK(test.valueUp(5) == 2);
+  CHECK(test.valueUp(6) == 3);
+  CHECK(test.valueUp(7) == 4);
+  CHECK(test.valueUp(8) == 5);
+
+  CHECK(test.valueUpperRight(0) == 7);
+  CHECK(test.valueUpperRight(1) == 8);
+  CHECK(test.valueUpperRight(2) == 6);
+  CHECK(test.valueUpperRight(3) == 1);
+  CHECK(test.valueUpperRight(4) == 2);
+  CHECK(test.valueUpperRight(5) == 0);
+  CHECK(test.valueUpperRight(6) == 4);
+  CHECK(test.valueUpperRight(7) == 5);
+  CHECK(test.valueUpperRight(8) == 3);
+
+  CHECK(test.valueRight(0) == 1);
+  CHECK(test.valueRight(1) == 2);
+  CHECK(test.valueRight(2) == 0);
+  CHECK(test.valueRight(3) == 4);
+  CHECK(test.valueRight(4) == 5);
+  CHECK(test.valueRight(5) == 3);
+  CHECK(test.valueRight(6) == 7);
+  CHECK(test.valueRight(7) == 8);
+  CHECK(test.valueRight(8) == 6);
+
+  CHECK(test.valueLowerRight(0) == 4);
+  CHECK(test.valueLowerRight(1) == 5);
+  CHECK(test.valueLowerRight(2) == 3);
+  CHECK(test.valueLowerRight(3) == 7);
+  CHECK(test.valueLowerRight(4) == 8);
+  CHECK(test.valueLowerRight(5) == 6);
+  CHECK(test.valueLowerRight(6) == 1);
+  CHECK(test.valueLowerRight(7) == 2);
+  CHECK(test.valueLowerRight(8) == 0);
+
+  CHECK(test.valueLow(0) == 3);
+  CHECK(test.valueLow(1) == 4);
+  CHECK(test.valueLow(2) == 5);
+  CHECK(test.valueLow(3) == 6);
+  CHECK(test.valueLow(4) == 7);
+  CHECK(test.valueLow(5) == 8);
+  CHECK(test.valueLow(6) == 0);
+  CHECK(test.valueLow(7) == 1);
+  CHECK(test.valueLow(8) == 2);
+
+  CHECK(test.valueLowerLeft(0) == 5);
+  CHECK(test.valueLowerLeft(1) == 3);
+  CHECK(test.valueLowerLeft(2) == 4);
+  CHECK(test.valueLowerLeft(3) == 8);
+  CHECK(test.valueLowerLeft(4) == 6);
+  CHECK(test.valueLowerLeft(5) == 7);
+  CHECK(test.valueLowerLeft(6) == 2);
+  CHECK(test.valueLowerLeft(7) == 0);
+  CHECK(test.valueLowerLeft(8) == 1);
+
+  CHECK(test.valueLeft(0) == 2);
+  CHECK(test.valueLeft(1) == 0);
+  CHECK(test.valueLeft(2) == 1);
+  CHECK(test.valueLeft(3) == 5);
+  CHECK(test.valueLeft(4) == 3);
+  CHECK(test.valueLeft(5) == 4);
+  CHECK(test.valueLeft(6) == 8);
+  CHECK(test.valueLeft(7) == 6);
+  CHECK(test.valueLeft(8) == 7);
+
+  CHECK(test.valueUpperLeft(0) == 8);
+  CHECK(test.valueUpperLeft(1) == 6);
+  CHECK(test.valueUpperLeft(2) == 7);
+  CHECK(test.valueUpperLeft(3) == 2);
+  CHECK(test.valueUpperLeft(4) == 0);
+  CHECK(test.valueUpperLeft(5) == 1);
+  CHECK(test.valueUpperLeft(6) == 5);
+  CHECK(test.valueUpperLeft(7) == 3);
+  CHECK(test.valueUpperLeft(8) == 4);
+
+  CHECK(test.onLeftEdge(0) == 1);
+  CHECK(test.onLeftEdge(1) == 0);
+  CHECK(test.onLeftEdge(2) == 0);
+  CHECK(test.onLeftEdge(3) == 1);
+  CHECK(test.onLeftEdge(4) == 0);
+  CHECK(test.onLeftEdge(5) == 0);
+  CHECK(test.onLeftEdge(6) == 1);
+  CHECK(test.onLeftEdge(7) == 0);
+  CHECK(test.onLeftEdge(8) == 0);
+
+  CHECK(test.onUpperEdge(0) == 1);
+  CHECK(test.onUpperEdge(1) == 1);
+  CHECK(test.onUpperEdge(2) == 1);
+  CHECK(test.onUpperEdge(3) == 0);
+  CHECK(test.onUpperEdge(4) == 0);
+  CHECK(test.onUpperEdge(5) == 0);
+  CHECK(test.onUpperEdge(6) == 0);
+  CHECK(test.onUpperEdge(7) == 0);
+  CHECK(test.onUpperEdge(8) == 0);
+
+  CHECK(test.onRightEdge(0) == 0);
+  CHECK(test.onRightEdge(1) == 0);
+  CHECK(test.onRightEdge(2) == 1);
+  CHECK(test.onRightEdge(3) == 0);
+  CHECK(test.onRightEdge(4) == 0);
+  CHECK(test.onRightEdge(5) == 1);
+  CHECK(test.onRightEdge(6) == 0);
+  CHECK(test.onRightEdge(7) == 0);
+  CHECK(test.onRightEdge(8) == 1);
+
+  CHECK(test.onLowerEdge(0) == 0);
+  CHECK(test.onLowerEdge(1) == 0);
+  CHECK(test.onLowerEdge(2) == 0);
+  CHECK(test.onLowerEdge(3) == 0);
+  CHECK(test.onLowerEdge(4) == 0);
+  CHECK(test.onLowerEdge(5) == 0);
+  CHECK(test.onLowerEdge(6) == 1);
+  CHECK(test.onLowerEdge(7) == 1);
+  CHECK(test.onLowerEdge(8) == 1);
+}
+
+#endif

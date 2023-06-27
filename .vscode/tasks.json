@@ -1,12 +1,10 @@
 {
-  // See https://go.microsoft.com/fwlink/?LinkId=733558
-  // for the documentation about the tasks.json format
   "version": "2.0.0",
   "tasks": [
     {
       "label": "GameOfLife",
       "type": "shell",
-      "command": "g++ -o ./bin/GameOfLife GameOfLife.cpp -lX11 -lGL -lpthread -lpng -lstdc++fs -std=c++17 && ./bin/GameOfLife",
+      "command": "g++ -o ./bin/GameOfLife GameOfLife.cpp -g -lX11 -lGL -lpthread -lpng -lstdc++fs -std=c++17 && ./bin/GameOfLife",
       "problemMatcher": [],
       "group": {
         "kind": "build",
